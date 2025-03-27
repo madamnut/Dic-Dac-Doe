@@ -4,7 +4,7 @@
 PlayerSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 26
-  productGUID: 4ac93f61abafc7d41be394b4bf0b26e8
+  productGUID: 7da1248c22bbd9a4e876c30ea5184888
   AndroidProfiler: 0
   AndroidFilterTouchesWhenObscured: 0
   AndroidEnableSustainedPerformanceMode: 0
@@ -706,10 +706,10 @@ PlayerSettings:
   apiCompatibilityLevel: 6
   activeInputHandler: 0
   windowsGamepadBackendHint: 0
-  cloudProjectId: 255a1ecd-049e-42fb-af7c-3391c2464303
+  cloudProjectId: 140c58e5-1085-4908-8ed1-ad8edb3fb826
   framebufferDepthMemorylessMode: 0
   qualitySettingsNames: []
-  projectName: Dic-Dac-Doe
+  projectName: Dic-Dac-Doe 2025-03-27_04-49-31
   organizationId: davidydlee
   cloudEnabled: 0
   legacyClampBlendShapeWeights: 0
