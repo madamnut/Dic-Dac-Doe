@@ -15,7 +15,11 @@ public class RelayManager : MonoBehaviour
 
     void Awake()
     {
-        if (Instance == null) Instance = this;
+        if (Instance == null)
+        {
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+        }
     }
 
     async void Start()
@@ -66,12 +70,13 @@ public class RelayManager : MonoBehaviour
             }
 
             transport.SetRelayServerData(relayData);
+
+            // 콜백 등록
+            NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
+
             NetworkManager.Singleton.StartHost();
 
             Debug.Log("Host started successfully.");
-
-            SceneManager.LoadScene("Game");
-
             return joinCode;
         }
         catch (System.Exception e)
@@ -109,15 +114,22 @@ public class RelayManager : MonoBehaviour
             NetworkManager.Singleton.StartClient();
 
             Debug.Log("Client started successfully.");
-
-            SceneManager.LoadScene("Game");
-
             return true;
         }
         catch (System.Exception e)
         {
             Debug.LogError("Relay Join Error: " + e.Message);
             return false;
+        }
+    }
+
+    private void OnClientConnected(ulong clientId)
+    {
+        // 클라이언트가 처음 들어왔을 때만 Game 씬으로 이동
+        if (NetworkManager.Singleton.IsHost && clientId != NetworkManager.Singleton.LocalClientId)
+        {
+            Debug.Log($"Client {clientId} joined. Host now loading Game scene.");
+            NetworkManager.Singleton.SceneManager.LoadScene("Game", LoadSceneMode.Single);
         }
     }
 }

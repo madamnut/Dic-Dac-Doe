@@ -19,7 +19,7 @@ public class UIManager : MonoBehaviour
         string code = await RelayManager.Instance.CreateRelay();
         if (!string.IsNullOrEmpty(code))
         {
-            codeDisplay.text = "Join Code: " + code;
+            codeDisplay.text = code;
         }
     }
 
