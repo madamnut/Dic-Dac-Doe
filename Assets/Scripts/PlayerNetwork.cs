@@ -18,7 +18,6 @@ public class PlayerNetwork : NetworkBehaviour
         }
     }
 
-    // 클라이언트가 버튼 클릭 시 호출 → 서버로 좌표 전송
     public void Draw(int x, int y)
     {
         Debug.Log($"클라이언트 요청: Draw({x}, {y})");
@@ -31,12 +30,30 @@ public class PlayerNetwork : NetworkBehaviour
         Debug.Log($"[서버] 좌표 수신: ({x}, {y}) from Client {OwnerClientId}");
 
         if (GameManager.Instance != null)
-        {
             GameManager.Instance.HandleDraw(x, y, OwnerClientId);
-        }
         else
-        {
             Debug.LogError("GameManager.Instance 가 null입니다. 서버에서 처리 실패");
-        }
+    }
+
+    public void RequestRematch()
+    {
+        RematchRequestServerRpc();
+    }
+
+    [ServerRpc]
+    private void RematchRequestServerRpc(ServerRpcParams rpcParams = default)
+    {
+        GameManager.Instance?.ReceiveRematchRequest(OwnerClientId);
+    }
+
+    public void RequestQuit()
+    {
+        QuitRequestServerRpc();
+    }
+
+    [ServerRpc]
+    private void QuitRequestServerRpc(ServerRpcParams rpcParams = default)
+    {
+        GameManager.Instance?.HandlePlayerQuit(OwnerClientId);
     }
 }

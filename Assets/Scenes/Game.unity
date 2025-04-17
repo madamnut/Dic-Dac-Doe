@@ -467,7 +467,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: YOU LOSE!!
+  m_Text: result
 --- !u!222 &473144050
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -1861,6 +1861,13 @@ MonoBehaviour:
   - {fileID: 1146404428}
   - {fileID: 823336470}
   - {fileID: 1224125177}
+  turnIndicatorText: {fileID: 1411206708}
+  resultPanel: {fileID: 755098238}
+  resultText: {fileID: 473144049}
+  rematchButton: {fileID: 1243516577}
+  quitButton: {fileID: 1140576467}
+  hostFlag: {fileID: 1756433373}
+  clientFlag: {fileID: 204387302}
 --- !u!4 &1266857762
 Transform:
   m_ObjectHideFlags: 0

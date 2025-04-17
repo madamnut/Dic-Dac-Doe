@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using Unity.Netcode;
+using UnityEngine.SceneManagement;
 using System.Collections.Generic;
 
 public class GameManager : NetworkBehaviour
@@ -15,6 +16,9 @@ public class GameManager : NetworkBehaviour
 
     private ulong xPlayerId;
     private ulong oPlayerId;
+
+    private HashSet<ulong> rematchRequests = new HashSet<ulong>();
+    private HashSet<ulong> quitRequests = new HashSet<ulong>();
 
     private Queue<Vector2Int> xMarks = new Queue<Vector2Int>();
     private Queue<Vector2Int> oMarks = new Queue<Vector2Int>();
@@ -34,6 +38,8 @@ public class GameManager : NetworkBehaviour
                 xPlayerId = clients[0].ClientId;
                 oPlayerId = clients[1].ClientId;
                 Debug.Log($"턴 순서 설정 완료: X={xPlayerId}, O={oPlayerId}");
+
+                UpdateTurnIndicatorClientRpc(currentTurn);
             }
         }
     }
@@ -55,8 +61,6 @@ public class GameManager : NetworkBehaviour
         string mark = currentTurn;
         board[x, y] = mark;
 
-        Debug.Log($"Client {clientId} → {mark} 가 ({x}, {y}) 선택");
-
         Queue<Vector2Int> markQueue = (mark == "X") ? xMarks : oMarks;
         markQueue.Enqueue(new Vector2Int(x, y));
 
@@ -71,27 +75,23 @@ public class GameManager : NetworkBehaviour
 
         if (CheckWin(mark))
         {
-            Debug.Log($"{mark} 승리!");
-            ShowResultClientRpc($"{mark} 승리!");
+            ShowResultClientRpc($"{mark} 승리!", mark);
             return;
         }
 
         if (CheckDraw())
         {
-            Debug.Log("무승부!");
-            ShowResultClientRpc("무승부!");
+            ShowResultClientRpc("무승부!", "Draw");
             return;
         }
 
         currentTurn = (currentTurn == "X") ? "O" : "X";
-        Debug.Log($"턴 변경됨: 현재 턴 → {currentTurn}");
+        UpdateTurnIndicatorClientRpc(currentTurn);
     }
 
     private bool IsPlayerTurn(ulong clientId)
     {
-        if (currentTurn == "X" && clientId == xPlayerId) return true;
-        if (currentTurn == "O" && clientId == oPlayerId) return true;
-        return false;
+        return (currentTurn == "X" && clientId == xPlayerId) || (currentTurn == "O" && clientId == oPlayerId);
     }
 
     [ClientRpc]
@@ -105,20 +105,103 @@ public class GameManager : NetworkBehaviour
     private void ClearCellClientRpc(int x, int y)
     {
         int index = y * 3 + x;
-
         var text = gameUI.gridButtons[index].GetComponentInChildren<Text>();
-        if (text != null)
-        {
-            text.text = "";
-        }
-
+        if (text != null) text.text = "";
         gameUI.gridButtons[index].interactable = true;
     }
 
     [ClientRpc]
-    private void ShowResultClientRpc(string result)
+    private void ShowResultClientRpc(string result, string winnerMark)
     {
-        Debug.Log($"게임 결과: {result}");
+        if (PlayerNetwork.Instance == null || gameUI == null) return;
+
+        ulong myId = PlayerNetwork.Instance.OwnerClientId;
+        string myMark = (myId == xPlayerId) ? "X" : (myId == oPlayerId) ? "O" : "";
+
+        if (winnerMark == "Draw")
+            gameUI.ShowResult("Draw", false);
+        else if (myMark == winnerMark)
+            gameUI.ShowResult("You Win!!", true);
+        else
+            gameUI.ShowResult("You Lose..", false);
+    }
+
+    [ClientRpc]
+    private void UpdateTurnIndicatorClientRpc(string nextTurn)
+    {
+        if (PlayerNetwork.Instance != null)
+        {
+            bool isMyTurn = (nextTurn == "X" && PlayerNetwork.Instance.OwnerClientId == xPlayerId) ||
+                            (nextTurn == "O" && PlayerNetwork.Instance.OwnerClientId == oPlayerId);
+            gameUI.SetTurnText(isMyTurn);
+        }
+    }
+
+    public void ReceiveRematchRequest(ulong clientId)
+    {
+        if (quitRequests.Count > 0)
+        {
+            Debug.Log("리매치 불가: 한 명 이상이 퀴트함");
+            return;
+        }
+
+        rematchRequests.Add(clientId);
+        Debug.Log($"Rematch 요청 수신: {clientId}");
+
+        if (rematchRequests.Contains(xPlayerId) && rematchRequests.Contains(oPlayerId))
+        {
+            Debug.Log("양쪽 모두 리매치 요청 → 게임 리셋");
+            ResetGame();
+        }
+    }
+
+    public void HandlePlayerQuit(ulong clientId)
+    {
+        quitRequests.Add(clientId);
+        Debug.Log($"플레이어 퀴트: {clientId}");
+
+        ShowOpponentQuitClientRpc();
+
+        if (NetworkManager.Singleton.IsHost)
+        {
+            if (clientId != NetworkManager.Singleton.LocalClientId)
+            {
+                NetworkManager.Singleton.DisconnectClient(clientId);
+            }
+            else
+            {
+                NetworkManager.Singleton.Shutdown();
+                SceneManager.LoadScene("Connect");
+            }
+        }
+        else
+        {
+            NetworkManager.Singleton.Shutdown();
+            SceneManager.LoadScene("Connect");
+        }
+    }
+
+    [ClientRpc]
+    private void ShowOpponentQuitClientRpc()
+    {
+        if (gameUI != null)
+            gameUI.MarkOpponentQuit();
+    }
+
+    private void ResetGame()
+    {
+        board = new string[3, 3];
+        xMarks.Clear();
+        oMarks.Clear();
+        currentTurn = "X";
+        rematchRequests.Clear();
+        quitRequests.Clear();
+
+        for (int i = 0; i < 3; i++)
+            for (int j = 0; j < 3; j++)
+                ClearCellClientRpc(i, j);
+
+        UpdateTurnIndicatorClientRpc(currentTurn);
     }
 
     private bool CheckWin(string mark)
@@ -128,10 +211,8 @@ public class GameManager : NetworkBehaviour
             if (board[i, 0] == mark && board[i, 1] == mark && board[i, 2] == mark) return true;
             if (board[0, i] == mark && board[1, i] == mark && board[2, i] == mark) return true;
         }
-
         if (board[0, 0] == mark && board[1, 1] == mark && board[2, 2] == mark) return true;
         if (board[0, 2] == mark && board[1, 1] == mark && board[2, 0] == mark) return true;
-
         return false;
     }
 
