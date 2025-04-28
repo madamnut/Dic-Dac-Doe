@@ -20,19 +20,13 @@ public class PlayerNetwork : NetworkBehaviour
 
     public void Draw(int x, int y)
     {
-        Debug.Log($"클라이언트 요청: Draw({x}, {y})");
         DrawRequestServerRpc(x, y);
     }
 
     [ServerRpc]
     private void DrawRequestServerRpc(int x, int y, ServerRpcParams rpcParams = default)
     {
-        Debug.Log($"[서버] 좌표 수신: ({x}, {y}) from Client {OwnerClientId}");
-
-        if (GameManager.Instance != null)
-            GameManager.Instance.HandleDraw(x, y, OwnerClientId);
-        else
-            Debug.LogError("GameManager.Instance 가 null입니다. 서버에서 처리 실패");
+        GameManager.Instance?.HandleDraw(x, y, OwnerClientId);
     }
 
     public void RequestRematch()

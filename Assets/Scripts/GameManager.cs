@@ -37,26 +37,15 @@ public class GameManager : NetworkBehaviour
             {
                 xPlayerId = clients[0].ClientId;
                 oPlayerId = clients[1].ClientId;
-                Debug.Log($"턴 순서 설정 완료: X={xPlayerId}, O={oPlayerId}");
-
-                UpdateTurnIndicatorClientRpc(currentTurn);
+                UpdateTurnIndicatorClientRpc(currentTurn, xPlayerId, oPlayerId);
             }
         }
     }
 
     public void HandleDraw(int x, int y, ulong clientId)
     {
-        if (!IsPlayerTurn(clientId))
-        {
-            Debug.Log($"클릭 무시됨: Client {clientId}의 턴이 아님");
-            return;
-        }
-
-        if (!string.IsNullOrEmpty(board[x, y]))
-        {
-            Debug.Log($"위치 ({x}, {y}) 는 이미 사용됨");
-            return;
-        }
+        if (!IsPlayerTurn(clientId)) return;
+        if (!string.IsNullOrEmpty(board[x, y])) return;
 
         string mark = currentTurn;
         board[x, y] = mark;
@@ -75,23 +64,37 @@ public class GameManager : NetworkBehaviour
 
         if (CheckWin(mark))
         {
-            ShowResultClientRpc($"{mark} 승리!", mark);
+            FinishGame(mark);
             return;
         }
 
         if (CheckDraw())
         {
-            ShowResultClientRpc("무승부!", "Draw");
+            FinishGame("Draw");
             return;
         }
 
         currentTurn = (currentTurn == "X") ? "O" : "X";
-        UpdateTurnIndicatorClientRpc(currentTurn);
+        UpdateTurnIndicatorClientRpc(currentTurn, xPlayerId, oPlayerId);
+    }
+
+    private void FinishGame(string winnerMark)
+    {
+        foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
+        {
+            bool isDraw = winnerMark == "Draw";
+            bool isWin = !isDraw && (
+                (winnerMark == "X" && client.ClientId == xPlayerId) ||
+                (winnerMark == "O" && client.ClientId == oPlayerId)
+            );
+            ShowResultClientRpc(client.ClientId, isWin, isDraw);
+        }
     }
 
     private bool IsPlayerTurn(ulong clientId)
     {
-        return (currentTurn == "X" && clientId == xPlayerId) || (currentTurn == "O" && clientId == oPlayerId);
+        return (currentTurn == "X" && clientId == xPlayerId) ||
+               (currentTurn == "O" && clientId == oPlayerId);
     }
 
     [ClientRpc]
@@ -111,30 +114,26 @@ public class GameManager : NetworkBehaviour
     }
 
     [ClientRpc]
-    private void ShowResultClientRpc(string result, string winnerMark)
+    private void UpdateTurnIndicatorClientRpc(string nextTurn, ulong xId, ulong oId)
     {
-        if (PlayerNetwork.Instance == null || gameUI == null) return;
-
-        ulong myId = PlayerNetwork.Instance.OwnerClientId;
-        string myMark = (myId == xPlayerId) ? "X" : (myId == oPlayerId) ? "O" : "";
-
-        if (winnerMark == "Draw")
-            gameUI.ShowResult("Draw", false);
-        else if (myMark == winnerMark)
-            gameUI.ShowResult("You Win!!", true);
-        else
-            gameUI.ShowResult("You Lose..", false);
+        bool isMyTurn = (nextTurn == "X" && NetworkManager.Singleton.LocalClientId == xId) ||
+                        (nextTurn == "O" && NetworkManager.Singleton.LocalClientId == oId);
+        gameUI.SetTurnText(isMyTurn);
     }
 
     [ClientRpc]
-    private void UpdateTurnIndicatorClientRpc(string nextTurn)
+    private void ShowResultClientRpc(ulong targetClientId, bool isWin, bool isDraw)
     {
-        if (PlayerNetwork.Instance != null)
+        if (NetworkManager.Singleton.LocalClientId == targetClientId)
         {
-            bool isMyTurn = (nextTurn == "X" && PlayerNetwork.Instance.OwnerClientId == xPlayerId) ||
-                            (nextTurn == "O" && PlayerNetwork.Instance.OwnerClientId == oPlayerId);
-            gameUI.SetTurnText(isMyTurn);
+            gameUI.ShowResult(isWin, isDraw);
         }
+    }
+
+    [ClientRpc]
+    private void HideResultPanelClientRpc()
+    {
+        gameUI.HideResultPanel();
     }
 
     public void ReceiveRematchRequest(ulong clientId)
@@ -146,11 +145,9 @@ public class GameManager : NetworkBehaviour
         }
 
         rematchRequests.Add(clientId);
-        Debug.Log($"Rematch 요청 수신: {clientId}");
 
         if (rematchRequests.Contains(xPlayerId) && rematchRequests.Contains(oPlayerId))
         {
-            Debug.Log("양쪽 모두 리매치 요청 → 게임 리셋");
             ResetGame();
         }
     }
@@ -158,34 +155,19 @@ public class GameManager : NetworkBehaviour
     public void HandlePlayerQuit(ulong clientId)
     {
         quitRequests.Add(clientId);
-        Debug.Log($"플레이어 퀴트: {clientId}");
+        gameUI.MarkOpponentQuit();
 
-        ShowOpponentQuitClientRpc();
-
-        if (NetworkManager.Singleton.IsHost)
+        if (NetworkManager.Singleton.LocalClientId == clientId)
         {
-            if (clientId != NetworkManager.Singleton.LocalClientId)
-            {
-                NetworkManager.Singleton.DisconnectClient(clientId);
-            }
-            else
-            {
-                NetworkManager.Singleton.Shutdown();
-                SceneManager.LoadScene("Connect");
-            }
-        }
-        else
-        {
+            // 자기 자신이 퀴트한 경우
             NetworkManager.Singleton.Shutdown();
             SceneManager.LoadScene("Connect");
         }
-    }
-
-    [ClientRpc]
-    private void ShowOpponentQuitClientRpc()
-    {
-        if (gameUI != null)
-            gameUI.MarkOpponentQuit();
+        else if (NetworkManager.Singleton.IsHost)
+        {
+            // 상대방 클라이언트를 서버가 끊어줌
+            NetworkManager.Singleton.DisconnectClient(clientId);
+        }
     }
 
     private void ResetGame()
@@ -197,11 +179,13 @@ public class GameManager : NetworkBehaviour
         rematchRequests.Clear();
         quitRequests.Clear();
 
+        HideResultPanelClientRpc(); // ⭐ 모든 클라이언트에서 결과창 끄기
+
         for (int i = 0; i < 3; i++)
             for (int j = 0; j < 3; j++)
                 ClearCellClientRpc(i, j);
 
-        UpdateTurnIndicatorClientRpc(currentTurn);
+        UpdateTurnIndicatorClientRpc(currentTurn, xPlayerId, oPlayerId);
     }
 
     private bool CheckWin(string mark)

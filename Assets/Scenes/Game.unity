@@ -1868,6 +1868,10 @@ MonoBehaviour:
   quitButton: {fileID: 1140576467}
   hostFlag: {fileID: 1756433373}
   clientFlag: {fileID: 204387302}
+  victorySFX: {fileID: 8300000, guid: 66b7b16232d459a43973d818ccc736a4, type: 3}
+  defeatSFX: {fileID: 8300000, guid: 07c615f86ac2be04a93170b6787faa02, type: 3}
+  placeMarkSFX: {fileID: 8300000, guid: 2775e001326ba934f8831129b7fa6738, type: 3}
+  buttonClickSFX: {fileID: 8300000, guid: d5373d1c6a228d1488b001d91ca21839, type: 3}
 --- !u!4 &1266857762
 Transform:
   m_ObjectHideFlags: 0
